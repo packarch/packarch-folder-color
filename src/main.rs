@@ -1,4 +1,5 @@
 mod apply;
+mod picker;
 mod recolor;
 mod theme;
 
@@ -54,7 +55,7 @@ struct Ui {
     toasts: adw::ToastOverlay,
     theme_row: adw::ComboRow,
     origin_label: gtk::Label,
-    color_button: gtk::ColorDialogButton,
+    picker: Rc<picker::ColorPicker>,
     pictures: Vec<(gtk::Picture, gtk::Box)>,
     apply_button: gtk::Button,
     restore_button: gtk::Button,
@@ -84,15 +85,6 @@ fn render_svg(svg: &str, px: u32) -> Option<gdk::Texture> {
         )
         .upcast(),
     )
-}
-
-fn to_rgba(c: Rgb) -> gdk::RGBA {
-    gdk::RGBA::new(c.0 as f32 / 255.0, c.1 as f32 / 255.0, c.2 as f32 / 255.0, 1.0)
-}
-
-fn from_rgba(c: &gdk::RGBA) -> Rgb {
-    let f = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    Rgb(f(c.red()), f(c.green()), f(c.blue()))
 }
 
 fn active_icon_theme() -> String {
@@ -175,8 +167,8 @@ impl Ui {
             return;
         }
         self.state.borrow_mut().color = Some(c);
-        if from_rgba(&self.color_button.rgba()) != c {
-            self.color_button.set_rgba(&to_rgba(c));
+        if self.picker.color() != c {
+            self.picker.set_color(c);
         }
         self.refresh_preview();
     }
@@ -309,18 +301,7 @@ fn build_ui(app: &adw::Application) {
     theme_group.add(&origin_row);
 
     // --- Couleur
-    let color_button = gtk::ColorDialogButton::new(Some(
-        gtk::ColorDialog::builder()
-            .title("Couleur des dossiers")
-            .with_alpha(false)
-            .build(),
-    ));
-    color_button.set_valign(gtk::Align::Center);
-    let custom_row = adw::ActionRow::builder()
-        .title("Couleur personnalisée")
-        .build();
-    custom_row.add_suffix(&color_button);
-    custom_row.set_activatable_widget(Some(&color_button));
+    let picker = picker::ColorPicker::new();
 
     let flow = gtk::FlowBox::builder()
         .selection_mode(gtk::SelectionMode::None)
@@ -353,7 +334,7 @@ fn build_ui(app: &adw::Application) {
 
     let color_group = adw::PreferencesGroup::builder().title("Couleur").build();
     color_group.add(&presets_row);
-    color_group.add(&custom_row);
+    color_group.add(&picker.row);
 
     // --- Boutons
     let restore_button = gtk::Button::builder()
@@ -409,7 +390,7 @@ fn build_ui(app: &adw::Application) {
         toasts,
         theme_row: theme_row.clone(),
         origin_label,
-        color_button: color_button.clone(),
+        picker: picker.clone(),
         pictures,
         apply_button: apply_button.clone(),
         restore_button: restore_button.clone(),
@@ -440,7 +421,7 @@ fn build_ui(app: &adw::Application) {
         ui.toast("Aucun thème d'icônes avec des dossiers SVG n'a été trouvé");
     }
     if let Some(c) = ui.state.borrow().color {
-        ui.color_button.set_rgba(&to_rgba(c));
+        ui.picker.set_color(c);
     }
 
     {
@@ -453,7 +434,7 @@ fn build_ui(app: &adw::Application) {
     }
     {
         let ui = ui.clone();
-        color_button.connect_rgba_notify(move |b| ui.set_color(from_rgba(&b.rgba())));
+        picker.connect_changed(move |c| ui.set_color(c));
     }
     for (b, c) in preset_buttons {
         let ui = ui.clone();
