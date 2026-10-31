@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Folder Color
+Name[fr]=Couleur des dossiers
+Comment=Change the folder color of the icon theme
+Comment[fr]=Changer la couleur des dossiers du thème d'icônes
+Exec=packarch-folder-color
+Icon=preferences-desktop-theme
+Terminal=false
+Categories=Settings;DesktopSettings;GTK;
+Keywords=icon;folder;color;theme;icône;dossier;couleur;thème;
+StartupNotify=true
