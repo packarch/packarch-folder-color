@@ -87,6 +87,15 @@ fn render_svg(svg: &str, px: u32) -> Option<gdk::Texture> {
     )
 }
 
+/// Hauteur maximale de la fenêtre : celle de son écran, moins de quoi laisser les barres.
+fn max_window_height(window: &adw::ApplicationWindow) -> i32 {
+    window
+        .surface()
+        .and_then(|s| gdk::Display::default()?.monitor_at_surface(&s))
+        .map(|m| m.geometry().height() - 80)
+        .unwrap_or(1000)
+}
+
 fn active_icon_theme() -> String {
     gtk::Settings::default()
         .and_then(|s| s.gtk_icon_theme_name())
@@ -452,6 +461,24 @@ fn build_ui(app: &adw::Application) {
         // L'aperçu est rendu à la résolution de l'écran.
         let ui = ui.clone();
         window.connect_scale_factor_notify(move |_| ui.refresh_preview());
+    }
+    {
+        // La fenêtre s'agrandit quand on déplie « Couleur personnalisée » (sans dépasser
+        // l'écran) et reprend sa taille quand on la replie.
+        let window = window.clone();
+        let p = picker.clone();
+        let added = Rc::new(std::cell::Cell::new(0));
+        picker.row.connect_expanded_notify(move |row| {
+            let (w, h) = (window.width(), window.height());
+            if row.is_expanded() {
+                let new_h = (h + p.expanded_height(w)).min(max_window_height(&window)).max(h);
+                added.set(new_h - h);
+                window.set_default_size(w, new_h);
+            } else if added.get() > 0 {
+                window.set_default_size(w, (h - added.get()).max(300));
+                added.set(0);
+            }
+        });
     }
 
     window.present();

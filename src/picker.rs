@@ -12,6 +12,8 @@ type Callback = Box<dyn Fn(Rgb)>;
 
 pub struct ColorPicker {
     pub row: adw::ExpanderRow,
+    /// Lignes affichées quand `row` est dépliée.
+    rows: Vec<gtk::Widget>,
     swatch: gtk::DrawingArea,
     hue: gtk::Scale,
     sat: gtk::Scale,
@@ -81,13 +83,19 @@ impl ColorPicker {
             .title("Couleur personnalisée")
             .build();
         row.add_suffix(&swatch);
-        row.add_row(&slider_row("Teinte", &hue));
-        row.add_row(&slider_row("Saturation", &sat));
-        row.add_row(&slider_row("Luminosité", &lig));
-        row.add_row(&entry);
+        let rows: Vec<gtk::Widget> = vec![
+            slider_row("Teinte", &hue).upcast(),
+            slider_row("Saturation", &sat).upcast(),
+            slider_row("Luminosité", &lig).upcast(),
+            entry.clone().upcast(),
+        ];
+        for r in &rows {
+            row.add_row(r);
+        }
 
         let picker = Rc::new(Self {
             row,
+            rows,
             swatch,
             hue,
             sat,
@@ -146,6 +154,15 @@ impl ColorPicker {
         }
         picker.set_color(picker.color.get());
         picker
+    }
+
+    /// Hauteur qu'ajoutent les lignes dépliées, pour une largeur de `width` pixels.
+    pub fn expanded_height(&self, width: i32) -> i32 {
+        self.rows
+            .iter()
+            // + 1 : séparateur entre les lignes de la liste
+            .map(|r| r.measure(gtk::Orientation::Vertical, width).1 + 1)
+            .sum()
     }
 
     pub fn color(&self) -> Rgb {
