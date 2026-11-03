@@ -7,6 +7,7 @@ use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 use recolor::Rgb;
 use std::cell::RefCell;
+use std::io::Write;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -223,14 +224,7 @@ fn apply_clicked(ui: Rc<Ui>) {
                 glib::timeout_add_local_once(Duration::from_millis(2000), move || {
                     apply::remove_other_generated(&keep);
                 });
-                let mut msg = format!(
-                    "Thème « {} » appliqué ({} icônes)",
-                    report.theme_id, report.written
-                );
-                if report.skipped_png > 0 {
-                    msg.push_str(&format!(", {} icônes PNG non modifiables", report.skipped_png));
-                }
-                ui.notify(&msg);
+                ui.notify("Couleurs appliquées");
             }
             Ok(Err(e)) => ui.toast(&format!("Erreur : {e:#}")),
             Err(_) => ui.toast("Erreur interne pendant la génération"),
@@ -245,7 +239,7 @@ fn restore_clicked(ui: Rc<Ui>) {
     // On laisse aux applications le temps de quitter le thème avant de le supprimer.
     glib::timeout_add_local_once(Duration::from_millis(1500), move || {
         match apply::remove(&base) {
-            Ok(()) => ui.notify(&format!("Thème « {base} » d'origine restauré")),
+            Ok(()) => ui.notify("Couleurs d'origine restaurées"),
             Err(e) => ui.toast(&format!("Erreur : {e:#}")),
         }
     });
@@ -507,6 +501,9 @@ fn build_ui(app: &adw::Application) {
 ///                                                         les autres thèmes générés
 ///   packarch-folder-color --list                          thèmes compatibles
 fn cli(args: &[String]) -> Option<glib::ExitCode> {
+    // Pas de println! : il plante si le lecteur a fermé le tube (`--list | head -1`).
+    // Renvoie false dans ce cas : plus personne ne lit, ce n'est pas une erreur.
+    let print = |line: &str| writeln!(std::io::stdout(), "{line}").is_ok();
     let fail = |msg: String| {
         eprintln!("{msg}");
         Some(glib::ExitCode::FAILURE)
@@ -515,7 +512,9 @@ fn cli(args: &[String]) -> Option<glib::ExitCode> {
         Some("--list") => {
             for t in theme::list_themes() {
                 let c = apply::detect_base_color(&t.id).map(|c| c.hex()).unwrap_or_default();
-                println!("{}\t{}\t{}", t.id, c, t.name);
+                if !print(&format!("{}\t{}\t{}", t.id, c, t.name)) {
+                    break;
+                }
             }
             Some(glib::ExitCode::SUCCESS)
         }
@@ -526,10 +525,10 @@ fn cli(args: &[String]) -> Option<glib::ExitCode> {
             };
             match apply::generate(base, color) {
                 Ok(r) => {
-                    println!(
+                    print(&format!(
                         "{} : {} icônes écrites, {} PNG ignorées",
                         r.theme_id, r.written, r.skipped_png
-                    );
+                    ));
                     Some(glib::ExitCode::SUCCESS)
                 }
                 Err(e) => fail(format!("erreur : {e:#}")),
@@ -546,7 +545,7 @@ fn cli(args: &[String]) -> Option<glib::ExitCode> {
                         apply::set_icon_theme(&id);
                     }
                     // Sur la sortie standard, seulement le nom du thème : lu par les scripts.
-                    println!("{id}");
+                    print(&id);
                     Some(glib::ExitCode::SUCCESS)
                 }
                 Err(e) => fail(format!("erreur : {e:#}")),
@@ -558,7 +557,7 @@ fn cli(args: &[String]) -> Option<glib::ExitCode> {
             Some(glib::ExitCode::SUCCESS)
         }
         Some("--help" | "-h") => {
-            println!(
+            print(
                 "Usage : packarch-folder-color [COMMANDE]\n\n\
                  Sans commande : interface graphique.\n\n\
                  --list                       thèmes compatibles et couleur de leurs dossiers\n\
@@ -566,7 +565,7 @@ fn cli(args: &[String]) -> Option<glib::ExitCode> {
                  \x20                            (le thème lui-même si c'est sa couleur)\n\
                  --apply <thème> <#couleur>   comme --prepare, puis active le thème\n\
                  --generate <thème> <#couleur> génère <thème>-<rrggbb> sans rien activer\n\
-                 --clean                      supprime tous les thèmes générés"
+                 --clean                      supprime tous les thèmes générés",
             );
             Some(glib::ExitCode::SUCCESS)
         }
