@@ -236,6 +236,11 @@ fn restore_clicked(ui: Rc<Ui>) {
     let base = ui.state.borrow().base.clone();
     apply::set_icon_theme(&base);
     ui.restore_button.set_sensitive(false);
+    // L'aperçu et le sélecteur reviennent à la couleur du thème qu'on vient de réactiver.
+    let origin = ui.state.borrow().base_color;
+    if let Some(c) = origin {
+        ui.set_color(c);
+    }
     // On laisse aux applications le temps de quitter le thème avant de le supprimer.
     glib::timeout_add_local_once(Duration::from_millis(1500), move || {
         match apply::remove(&base) {

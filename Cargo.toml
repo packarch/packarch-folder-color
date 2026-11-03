@@ -1,6 +1,6 @@
 [package]
 name = "packarch-folder-color"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 description = "Change the folder color of icon themes"
 license = "GPL-3.0-or-later"
