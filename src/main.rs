@@ -108,6 +108,20 @@ impl Ui {
         self.toasts.add_toast(adw::Toast::new(msg));
     }
 
+    /// Notification système pour les succès : les erreurs restent dans la fenêtre (`toast`),
+    /// car une notification est perdue sans signe s'il n'y a pas de service pour l'afficher.
+    fn notify(&self, msg: &str) {
+        let Some(app) = gio::Application::default() else {
+            self.toast(msg);
+            return;
+        };
+        let notification = gio::Notification::new("Couleur des dossiers");
+        notification.set_body(Some(msg));
+        notification.set_icon(&gio::ThemedIcon::new("preferences-desktop-theme"));
+        // Même identifiant : une nouvelle notification remplace la précédente.
+        app.send_notification(Some("status"), &notification);
+    }
+
     fn refresh_preview(&self) {
         let st = self.state.borrow();
         let scale = self.toasts.scale_factor().max(1) as u32;
@@ -216,7 +230,7 @@ fn apply_clicked(ui: Rc<Ui>) {
                 if report.skipped_png > 0 {
                     msg.push_str(&format!(", {} icônes PNG non modifiables", report.skipped_png));
                 }
-                ui.toast(&msg);
+                ui.notify(&msg);
             }
             Ok(Err(e)) => ui.toast(&format!("Erreur : {e:#}")),
             Err(_) => ui.toast("Erreur interne pendant la génération"),
@@ -231,7 +245,7 @@ fn restore_clicked(ui: Rc<Ui>) {
     // On laisse aux applications le temps de quitter le thème avant de le supprimer.
     glib::timeout_add_local_once(Duration::from_millis(1500), move || {
         match apply::remove(&base) {
-            Ok(()) => ui.toast(&format!("Thème « {base} » d'origine restauré")),
+            Ok(()) => ui.notify(&format!("Thème « {base} » d'origine restauré")),
             Err(e) => ui.toast(&format!("Erreur : {e:#}")),
         }
     });
@@ -356,6 +370,8 @@ fn build_ui(app: &adw::Application) {
     apply_button.add_css_class("suggested-action");
     let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     buttons.set_halign(gtk::Align::Center);
+    buttons.set_margin_top(12);
+    buttons.set_margin_bottom(12);
     buttons.append(&restore_button);
     buttons.append(&apply_button);
 
@@ -367,7 +383,6 @@ fn build_ui(app: &adw::Application) {
     content.append(&preview_box);
     content.append(&theme_group);
     content.append(&color_group);
-    content.append(&buttons);
 
     let clamp = adw::Clamp::builder().maximum_size(640).child(&content).build();
     let scrolled = gtk::ScrolledWindow::builder()
@@ -380,6 +395,8 @@ fn build_ui(app: &adw::Application) {
     let header = adw::HeaderBar::new();
     let toolbar = adw::ToolbarView::new();
     toolbar.add_top_bar(&header);
+    // Les boutons restent hors de la zone des bulles, qui s'affichent en bas de celle-ci.
+    toolbar.add_bottom_bar(&buttons);
     toolbar.set_content(Some(&toasts));
 
     let window = adw::ApplicationWindow::builder()
